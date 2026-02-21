@@ -1,7 +1,0 @@
-
-==================================================
-           FINAL VERIFICATION SUMMARY
-==================================================
-  [PASS] Router: Speculation Latency=0.98s (Cmd: ls -a)
-  [PASS] Analyzer: Injected recovery hint on failure.
-==================================================

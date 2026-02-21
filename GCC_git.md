@@ -52,7 +52,11 @@ Updates the project's global `main.md` pointer. Future AI turns will now target 
 
 ## 4. Implementation Detail: Atomic Writes
 To prevent data corruption during terminal crashes, GCC uses a **Shadow Copy** write strategy:
-3.  Rename/Replace `file.md`.
+1. Write to a temporary `.tmp` file in the same directory.
+2. Flush to disk.
+3. Atomically rename to the target `file.md`.
+
+This ensures that even a hard-kill of the process never leaves a partially-written log file.
 
 ### Worker Thread Safety (Phase 13)
 Directory-intensive operations (like branching massive sessions) are performance-offloaded to dedicated worker threads using `asyncio.to_thread` to prevent terminal lag.

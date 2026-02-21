@@ -1,23 +1,26 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
+*.egg-info
 build/
 dist/
 wheels/
-*.egg-info
 
-# Virtual environments
-.venv
+# Virtual environment
+.venv/
+.python-version
+
+# Environment / secrets
 .env
 .env.local
 
-# Databases and Local State
+# Databases and local agent state
 .GCC/
 .lancedb/
 *.db
 *.db-journal
 
-# Logs and artifacts
+# Logs and runtime artifacts
 *.log
 exports/
 
@@ -29,24 +32,24 @@ Thumbs.db
 src/cli/visualizer/node_modules/
 src/cli/visualizer/dist/
 src/cli/visualizer/.env
+src/cli/visualizer/.env.local
 
-# Expert Hardening
+# Expert hardening state
 panic_state.json
 .langfuse_data/
 
-# Benchmarks and Reports
-benchmark_results/
-benchmark_final_hardened_results.txt
-benchmark_final_production_results.txt
-benchmark_final_hardened.py
-benchmark_final_production.py
-walkthrough_v2.md.tmp
-
-# Tests and Verification Scripts
-src/tests/
-test_*.py
+# Benchmarks and temporary scripts
+benchmark_*.py
+benchmark_*.txt
 verify_*.py
+verify_*.txt
+test_*.py
 check_*.py
-mock_*.py
-log.md.mdzod-validat
+debug_*.py
+final_verify.py
+*.tmp
+
+# Test directories and caches
+.pytest_cache/
 test_gcc_logs_isolated/
+test_chaos_path/
