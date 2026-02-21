@@ -35,12 +35,17 @@ class GCCStorage:
             # BUG-11 FIX: File locking to prevent interleaved writes
             if os.name == 'nt':
                 import msvcrt
+                # Lock 1 byte at current position (EOF in 'a' mode)
+                pos = f.tell()
                 msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
                 try:
                     f.write(content)
                 finally:
-                    f.seek(0)
+                    # Return to the locked position to unlock
+                    f.seek(pos)
                     msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                    # Support subsequent writes if needed by moving back to end
+                    f.seek(0, 2)
             else:
                 import fcntl
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX)

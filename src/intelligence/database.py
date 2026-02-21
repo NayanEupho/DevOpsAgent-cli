@@ -83,6 +83,18 @@ class DatabaseService:
             await self._conn.execute("ALTER TABLE command_history ADD COLUMN cwd TEXT")
             logger.info("Intelligence DB: Migrated command_history table (added cwd column)")
             
+        # Visualizer Redesign: Add session type and metadata
+        cursor = await self._conn.execute("PRAGMA table_info(sessions)")
+        session_columns = [row[1] for row in await cursor.fetchall()]
+        
+        if "session_type" not in session_columns:
+            await self._conn.execute("ALTER TABLE sessions ADD COLUMN session_type TEXT DEFAULT 'regular'")
+            logger.info("Intelligence DB: Migrated sessions table (added session_type)")
+            
+        if "metadata" not in session_columns:
+            await self._conn.execute("ALTER TABLE sessions ADD COLUMN metadata TEXT")
+            logger.info("Intelligence DB: Migrated sessions table (added metadata)")
+            
         await self._conn.commit()
 
     async def close(self):
@@ -101,9 +113,24 @@ class DatabaseService:
         async with self._conn.execute(query, params) as cursor:
             return await cursor.fetchall()
 
-    async def insert_session(self, session_id: str, goal: str, path: str, title: Optional[str] = None, parent_id: Optional[str] = None):
-        query = "INSERT OR IGNORE INTO sessions (id, title, goal, path, parent_id) VALUES (?, ?, ?, ?, ?)"
-        await self.execute(query, (session_id, title or goal[:50], goal, path, parent_id))
+    async def get_session_metrics(self, session_id: str) -> dict:
+        """Computes counts and detects environment info for a session."""
+        cmd_query = "SELECT count(*), env_os, env_shell FROM command_history WHERE session_id = ? GROUP BY env_os, env_shell"
+        rows = await self.read_execute(cmd_query, (session_id,))
+        
+        count = sum(r[0] for r in rows) if rows else 0
+        os_info = rows[0][1] if rows else "Unknown"
+        shell_info = rows[0][2] if rows else "Unknown"
+        
+        return {
+            "commandCount": count,
+            "os": os_info,
+            "shell": shell_info
+        }
+
+    async def insert_session(self, session_id: str, goal: str, path: str, title: Optional[str] = None, parent_id: Optional[str] = None, session_type: str = "regular"):
+        query = "INSERT OR IGNORE INTO sessions (id, title, goal, path, parent_id, session_type) VALUES (?, ?, ?, ?, ?, ?)"
+        await self.execute(query, (session_id, title or goal[:50], goal, path, parent_id, session_type))
 
     async def rename_session(self, session_id: str, new_title: str):
         query = "UPDATE sessions SET title = ? WHERE id = ?"

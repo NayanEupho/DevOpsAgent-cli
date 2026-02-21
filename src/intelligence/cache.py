@@ -12,18 +12,21 @@ class SemanticCache:
 
     async def get(self, query: str) -> Optional[str]:
         """Check if a similar query exists in the cache (Vector DB)."""
-        # We leverage the existing memories table but with a dedicated 'cache' namespace
-        hits = await self.registry.vector.search(query, limit=1, threshold=self.threshold)
-        if hits:
-            hit = hits[0]
-            meta = hit["metadata"]
-            if isinstance(meta, str):
-                 import json
-                 meta = json.loads(meta)
-            
-            if meta.get("context_type") == "semantic_cache":
-                logger.info(f"Semantic Cache: HIT for '{query[:30]}...' (Score: {hit['score']:.2f})")
-                return meta.get("cached_response")
+        try:
+            # We leverage the existing memories table but with a dedicated 'cache' namespace
+            hits = await self.registry.vector.search(query, limit=1, threshold=self.threshold)
+            if hits:
+                hit = hits[0]
+                meta = hit["metadata"]
+                if isinstance(meta, str):
+                     import json
+                     meta = json.loads(meta)
+                
+                if meta.get("context_type") == "semantic_cache":
+                    logger.info(f"Semantic Cache: HIT for '{query[:30]}...' (Score: {hit['score']:.2f})")
+                    return meta.get("cached_response")
+        except Exception as e:
+            logger.warning(f"Semantic Cache: Retrieval failed (masking for stability): {e}")
         return None
 
     async def set(self, query: str, response: str):

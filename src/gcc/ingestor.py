@@ -5,8 +5,10 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 class GCCIngestor:
     @staticmethod
-    def parse_log(log_path: Path) -> List[BaseMessage]:
-        """Parse log.md into LangChain messages."""
+    def parse_log(log_path: Path, start_offset: int = 0) -> List[BaseMessage]:
+        """Parse log.md into LangChain messages, optionally starting from an offset.
+        The offset refers to the number of top-level headers (## [HH:MM]) previously processed.
+        """
         if not log_path.exists():
             return []
 
@@ -17,7 +19,10 @@ class GCCIngestor:
         # Split by sections starting with ## [HH:MM]
         sections = re.split(r'\n(?=## \[\d{2}:\d{2}\])', content)
 
-        for section in sections:
+        # Apply offset to skip already processed sections
+        effective_sections = sections[start_offset:] if start_offset < len(sections) else []
+
+        for section in effective_sections:
             section = section.strip()
             if not section:
                 continue
@@ -34,8 +39,6 @@ class GCCIngestor:
             body = re.sub(r'## \[\d{2}:\d{2}\]\s+(AI|HUMAN)', '', section, count=1).strip()
 
             if role == "AI":
-                # Convert OTA trace back to a readable thought/action summary
-                # We prefix with timestamp to keep the agent aware of 'when'
                 messages.append(AIMessage(content=f"[{timestamp}] {body}"))
             else:
                 messages.append(HumanMessage(content=f"[{timestamp}] {body}"))
@@ -45,7 +48,5 @@ class GCCIngestor:
     @staticmethod
     def get_new_entries(log_path: Path, processed_count: int) -> List[BaseMessage]:
         """Get only the entries that haven't been processed yet."""
-        all_messages = GCCIngestor.parse_log(log_path)
-        if len(all_messages) > processed_count:
-            return all_messages[processed_count:]
-        return []
+        # Use the offset directly in parse_log to avoid re-parsing the head
+        return GCCIngestor.parse_log(log_path, start_offset=processed_count)

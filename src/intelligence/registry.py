@@ -170,7 +170,9 @@ class IntelligenceRegistry:
         
         # 2. Create branch ID and path
         from datetime import datetime
-        branch_id = f"branch_{branch_name.replace(' ', '-')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        import re
+        branch_name_safe = re.sub(r'[^a-z0-9_-]', '', branch_name.lower().replace(' ', '-'))
+        branch_id = f"branch_{branch_name_safe}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         branch_path = Path(parent_path).parent / branch_id
         
         # 3. Clone physical GCC state (Harden: Use thread for blocking I/O)

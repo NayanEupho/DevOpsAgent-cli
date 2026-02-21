@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from src.intelligence.registry import IntelligenceRegistry
@@ -17,31 +18,33 @@ app.add_middleware(
 
 @app.get("/sessions/tree")
 async def get_session_tree():
-    """Returns the full DAG of sessions for visualization."""
+    """Returns the full DAG of sessions for visualization with rich metadata."""
     registry = IntelligenceRegistry.get_instance()
     await registry.initialize()
     
     query = """
-    SELECT id, title, goal, parent_id, status, created_at, path 
+    SELECT id, title, goal, parent_id, status, created_at, path, session_type 
     FROM sessions 
     ORDER BY created_at ASC
     """
     rows = await registry.db.read_execute(query)
     
-    # Get active session from main.md (simplified)
-    # In a full impl, we'd have a 'settings' table or similar
-    
     nodes = []
     for row in rows:
+        session_id = row[0]
+        metrics = await registry.db.get_session_metrics(session_id)
+        
         nodes.append({
-            "id": row[0],
+            "id": session_id,
             "title": row[1],
             "goal": row[2],
             "parentId": row[3],
             "status": row[4],
             "createdAt": row[5],
             "path": row[6],
-            "isActive": row[4] == "active"
+            "type": row[7],
+            "isActive": row[4] == "active",
+            "commandCount": metrics["commandCount"]
         })
     
     return nodes
@@ -83,9 +86,14 @@ async def get_session_content(session_id: str):
     log_path = session_path / "log.md"
     commit_path = session_path / "commit.md"
     
+    # Fetch real metrics from DB
+    metrics = await registry.db.get_session_metrics(session_id)
+    
     content = {
         "log": "",
-        "commit": ""
+        "commit": "",
+        "os": metrics["os"],
+        "shell": metrics["shell"]
     }
     
     if log_path.exists():
@@ -97,6 +105,37 @@ async def get_session_content(session_id: str):
             content["commit"] = f.read()
             
     return content
+
+@app.get("/sessions/{session_id}/export/{file_type}")
+async def export_session_file(session_id: str, file_type: str):
+    """Securely exports log.md or commit.md as a file download."""
+    if file_type not in ["log", "commit"]:
+        raise HTTPException(status_code=400, detail="Invalid file type")
+        
+    registry = IntelligenceRegistry.get_instance()
+    await registry.initialize()
+    
+    rows = await registry.db.read_execute("SELECT path FROM sessions WHERE id = ?", (session_id,))
+    if not rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    session_path = Path(rows[0][0]).resolve()
+    # Edge Case Hardening: Ensure path is within GCC base to prevent traversal
+    gcc_base = Path(config.agent.gcc_base_path).resolve()
+    if not str(session_path).startswith(str(gcc_base)):
+         raise HTTPException(status_code=403, detail="Access denied")
+
+    filename = f"{file_type}.md"
+    target_file = session_path / filename
+    
+    if not target_file.exists():
+        raise HTTPException(status_code=404, detail=f"{filename} not found on disk")
+        
+    return FileResponse(
+        path=target_file,
+        filename=f"{session_id}_{filename}",
+        media_type="text/markdown"
+    )
 
 if __name__ == "__main__":
     import uvicorn

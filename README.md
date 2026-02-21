@@ -11,16 +11,17 @@ A premium, state-of-the-art AI assistant designed for high-stakes DevOps enginee
 
 ## 🌟 Key Features
 
-*   **🧠 LangGraph Intelligence**: Multi-node reasoning (Planner -> Safety -> Executor -> Analyzer) for complex, multi-step problem solving.
+*   **⌨️ Hybrid Mode Switching (Tab)**: Cycle between `AUTO`, `EXEC`, and `CHAT` modes using the `Tab` key on an empty input.
+*   **⚡ Speculative Fast-Path**: A localized reflexive model (Router) intercepts simple requests for sub-500ms command generation, bypassing the heavy planner.
+*   **💬 Conversational Bypass**: Purely informational queries are short-circuited to a dedicated `Chat` node for instant, non-executing responses.
+*   **🧠 LangGraph Intelligence**: Multi-node reasoning with circuit breakers and environment drift detection.
 *   **📜 GCC (Git Context Controller)**: Git-inspired project memory with branching lineage, logs, and findings.
 *   **🛡️ Safety Gate**: Built-in human-in-the-loop approval system for all terminal commands.
-*   **🔭 Visualizer Dashboard**: Interactive D3.js branching tree graph to explore your session history in Light/Dark mode.
+*   **🔭 High-Fidelity Visualizer**: Interactive 3-column dashboard with a deterministic D3 hierarchical tree, live log streaming, and resilient parser hardening.
 *   **⚡ AI Summoner (Ctrl+R)**: Seamlessly switch between Manual Shell and AI Chat without losing context.
-*   **🌊 Ollama-Style Streaming**: Real-time token streaming for all AI responses (Markdown rendered live).
-*   **🖥️ Live Status HUD**: A dynamic status bar tracking reasoning nodes (`🧠 Planning`, `🛠️ Executing`, etc.).
-*   **💬 Intelligent Safety Gate**: Support for Natural Language approvals (e.g., *"Sure, go ahead"*) and expert redirection (*"Try X instead"*).
-*   **🧠 Intelligence Layer**: Hybrid memory using SQLite (structured) and LanceDB (semantic/vector) with "Platinum Envelope" structured ingestion.
-*   **👁️ Observability**: Full local tracing and token monitoring via **Langfuse** with automated PII/Secret redaction and feedback scoring.
+*   **🖥️ Live Status HUD**: A dynamic status bar tracking reasoning nodes (`🧠 Planning`, `🛠️ Executing`, `💬 Conversing`).
+*   **🧠 Intelligence Layer**: Hybrid memory using SQLite and LanceDB with "Platinum Envelope" structured ingestion.
+*   **👁️ Observability**: Full local tracing via **Langfuse** with automated PII/Secret redaction.
 *   **🛡️ Production-Grade Hardening**: Built-in protection against PII leaks, context window overflow, and malformed command output.
 
 ---
@@ -30,31 +31,29 @@ A premium, state-of-the-art AI assistant designed for high-stakes DevOps enginee
 ```mermaid
 graph TD
     User([User CLI]) --> Mode{Mode Controller}
-    Mode -- Chat --> LangGraph[LangGraph Agent Loop]
-    Mode -- Manual --> Shell[Subprocess Shell]
+    Mode -- Tab --> Interaction[Interaction Mode: AUTO/EXEC/CHAT]
+    Interaction --> Router{Fast-Path Router}
     
+    Router -- Simple/Manual --> Fast[Speculative Execution]
+    Router -- Informational --> ChatNode[Chat Node]
+    Router -- Complex --> Planner[Heavy Planner]
+
     subgraph "Agent Core"
-        LangGraph --> Planner[Planner Node]
         Planner --> Safety[Safety Gate]
         Safety -- Approved --> Executor[Executor Node]
         Executor --> Analyzer[Analyzer Node]
     end
     
     subgraph "Project Memory (GCC)"
-        LangGraph <--> GCC[GCC Storage]
+        Interaction <--> GCC[GCC Storage]
         GCC --> Log[log.md - History]
         GCC --> Commit[commit.md - Milestones]
     end
     
     subgraph "Intelligence Layer"
-        LangGraph <--> Registry[Intelligence Registry]
+        Interaction <--> Registry[Intelligence Registry]
         Registry <--> SQLite[(SQLite - Metadata)]
         Registry <--> LanceDB[(LanceDB - Vector)]
-    end
-    
-    subgraph "Visualization"
-        Registry --> API[FastAPI Bridge]
-        API --> Dashboard[React/D3 Visualizer]
     end
 ```
 
@@ -106,6 +105,14 @@ cd src/cli/visualizer && bun run dev
 - [**user_guide.md**](user_guide.md) - Step-by-step setup and feature usage.
 - [**GCC_git.md**](GCC_git.md) - Understanding the Git Context Controller logic.
 - [**Langfuse_use.md**](Langfuse_use.md) - Local Observability and Monitoring guide.
+
+---
+
+## 🧹 Maintenance
+*   **Nuclear Reset**: Wipe all local state (SQLite, LanceDB, GCC) and start fresh:
+    ```bash
+    uv run devops-agent reset --nuclear
+    ```
 
 ---
 

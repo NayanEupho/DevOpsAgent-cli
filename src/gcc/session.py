@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Optional
 from src.config import config
 from src.gcc.storage import GCCStorage
+from loguru import logger
 
 class Session:
     def __init__(self, session_id: str, goal: str, created_at: str = None):
@@ -53,13 +54,13 @@ class SessionManager:
         GCCStorage.atomic_write(str(self.main_md_path), content)
 
     def create_session(self, goal: str) -> Session:
+        import re
         timestamp = datetime.now().strftime("%Y-%m-%d")
-        slug = goal.lower().replace(" ", "-")[:30]
+        slug = re.sub(r'[^a-z0-9_-]', '', goal.lower().replace(" ", "-"))[:30]
         
         # Determine next ID (BUG-10 FIX: parse max to avoid gaps from deletions)
         existing = list(self.sessions_path.glob("session_*"))
         if existing:
-            import re
             ids = []
             for d in existing:
                 m = re.match(r"session_(\d+)_", d.name)
@@ -99,5 +100,19 @@ class SessionManager:
                     with open(meta_path, 'r') as f:
                         sessions.append(yaml.safe_load(f))
         return sessions
+
+    def reset_all(self):
+        """Wipes the physical GCC session tree."""
+        import shutil
+        if self.sessions_path.exists():
+            shutil.rmtree(self.sessions_path)
+            self.sessions_path.mkdir(parents=True, exist_ok=True)
+        
+        if self.archived_path.exists():
+            shutil.rmtree(self.archived_path)
+            self.archived_path.mkdir(parents=True, exist_ok=True)
+            
+        self._init_main_md()
+        logger.warning("SessionManager: Physical GCC reset complete.")
 
 session_manager = SessionManager()

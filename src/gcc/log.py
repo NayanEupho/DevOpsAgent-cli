@@ -1,29 +1,41 @@
 from datetime import datetime
 from pathlib import Path
 from src.gcc.storage import GCCStorage
+from src.intelligence.observability import Redactor
 
 class OTAEntry:
     def __init__(self, observation: str = "", thought: str = "", action: str = "", output: str = "", inference: str = ""):
         self.timestamp = datetime.now().strftime("%H:%M")
-        self.observation = observation
-        self.thought = thought
-        self.action = action
-        self.output = output
-        self.inference = inference
+        
+        # Redact and truncate inputs
+        self.observation = Redactor.redact_text(observation)
+        self.thought = Redactor.redact_text(thought)
+        self.action = Redactor.redact_text(action)
+        
+        # Truncate large outputs to 5000 chars for log sustainability
+        raw_output = Redactor.redact_text(output)
+        if len(raw_output) > 5000:
+            self.output = raw_output[:5000] + "\n... (truncated for log brevity)"
+        else:
+            self.output = raw_output
+            
+        self.inference = Redactor.redact_text(inference)
 
     def to_markdown(self) -> str:
         return f"""
 ## [{self.timestamp}] AI
-OBSERVATION: {self.observation}
+**OBSERVATION:** {self.observation if self.observation else "N/A"}
 
-THOUGHT: {self.thought}
+**THOUGHT:** {self.thought if self.thought else "N/A"}
 
-ACTION: {self.action}
+**ACTION:** `{self.action}`
 
-OUTPUT:
-{self.output}
+**OUTPUT:**
+```bash
+{self.output if self.output else "(No output)"}
+```
 
-INFERENCE: {self.inference}
+**INFERENCE:** {self.inference if self.inference else "N/A"}
 
 ---
 """
@@ -31,22 +43,30 @@ INFERENCE: {self.inference}
 class HumanEntry:
     def __init__(self, command: str, output: str):
         self.timestamp = datetime.now().strftime("%H:%M")
-        self.command = command
-        self.output = output
+        self.command = Redactor.redact_text(command)
+        
+        raw_output = Redactor.redact_text(output)
+        if len(raw_output) > 5000:
+            self.output = raw_output[:5000] + "\n... (truncated for log brevity)"
+        else:
+            self.output = raw_output
 
     def to_markdown(self) -> str:
         return f"""
 ## [{self.timestamp}] HUMAN
-{self.command}
+**COMMAND:** `{self.command}`
 
-OUTPUT:
-{self.output}
+**OUTPUT:**
+```bash
+{self.output if self.output else "(No output)"}
+```
 
 ---
 """
 
 class GCCLogger:
     def __init__(self, session_path: Path):
+        self.session_path = session_path
         self.log_path = session_path / "log.md"
         self.commit_path = session_path / "commit.md"
 
@@ -60,5 +80,8 @@ class GCCLogger:
 
     def log_commit(self, summary: str, finding: str):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        summary = Redactor.redact_text(summary)
+        finding = Redactor.redact_text(finding)
+        
         content = f"### [{timestamp}] COMMIT\n**Summary:** {summary}\n**Finding:** {finding}\n\n---\n"
         GCCStorage.atomic_append(str(self.commit_path), content)

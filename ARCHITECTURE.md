@@ -25,27 +25,39 @@ We use LangGraph instead of a simple linear chain to support **cycles**, **condi
 stateDiagram-v2
     [*] --> Prober
     Prober --> Ingestion
-    Ingestion --> Planner
+    Ingestion --> Router: speculates/manual
+    
+    Router --> Chat: Informational
+    Router --> FastPath: Simple Command
+    Router --> Planner: Complex/AUTO
     
     Planner --> SafetyGate: Command Proposed
+    FastPath --> SafetyGate: Speculated Command
+    
     SafetyGate --> Executor: Approved
     SafetyGate --> Negotiator: Denied/Review
     
     Negotiator --> Planner
     
     Executor --> Analyzer
-    Analyzer --> Planner: Result Logged
+    Analyzer --> Audit
+    Audit --> Planner: Result Logged
+    Audit --> Prober: Drift Detected
     
     Planner --> [*]: Goal Achieved
+    Chat --> [*]: Question Answered
 ```
 
 ### Node Responsibilities
 *   **Prober**: Detects OS, Shell, and Tool availability (Docker, K8s, Git) at the start of every session.
-*   **Ingestion**: Scans the GCC `log.md` for manual actions or missed context.
-*   **Planner**: The AI "Brain." Considers goal + history + env to propose a shell command or response.
+*   **Ingestion**: Scans the GCC `log.md` for manual actions or missed context with offset-based efficiency.
+*   **Router**: A high-speed reflexive node that speculates if a query is a simple command, a conversational question, or complex strategy.
+*   **Chat**: A specialized node for informational queries that bypasses tool execution for maximum safety and speed.
+*   **Planner**: The heavy AI "Brain." Considers goal + history + env for complex, multi-step orchestration.
 *   **Safety Gate**: A hard breakpoint. Interrupts the graph and waits for user approval via the CLI.
 *   **Executor**: Uses **FastMCP** to run commands in the local shell.
 *   **Analyzer**: Summarizes the tool output and logs it back into the Intelligence DB.
+*   **Audit**: Expert system that checks for environment drift, identical command loops, and turn limits.
 
 ---
 
@@ -86,12 +98,20 @@ We solve the "Context Bloat" problem by separating immediate state from long-ter
 
 ## 5. Visualizer & API Bridge
 
-The Visualizer provides a HUD (Heads-Up Display) for the GCC tree.
+The Visualizer provides a high-fidelity HUD (Heads-Up Display) for the GCC tree, optimized for information density and execution tracing.
 
-*   **FastAPI Backend**: Serves as a bridge, querying the Intelligence SQLite DB and reading the `.GCC` filesystem to provide JSON representations of the DAG.
-*   **React Frontend (Bun)**: A high-performance dashboard.
-*   **D3.js Graph**: Uses a hierarchical stratification algorithm to render the parent-child session branches.
-*   **Live Sync**: Uses non-blocking polling (2s) to scroll the execution logs as the agent works.
+### 5. Visualizer & API Bridge
+
+The Visualizer provides a high-fidelity HUD (Heads-Up Display) for the GCC tree, optimized for information density and execution tracing.
+
+*   **FastAPI Backend**: Serves as a bridge, querying the Intelligence SQLite DB and reading the `.GCC` filesystem.
+    *   **Enriched Telemetry**: Automatically detects and computes session metrics (command counts, OS, Shell) via the `DatabaseService`.
+    *   **Secure Exports**: Provides path-resolve hardened endpoints for downloading `log.md` and `commit.md` directly.
+*   **React Frontend (Bun)**: A three-column dashboard (Navigator, Graph, Details).
+*   **Optimal Layout**: Grid system optimized with a wider Navigator (`380px`) and Detail Panel (`450px`) for high-information density.
+*   **D3.js Hierarchy**: Uses `d3.tree()` with `nodeSize([48, 80])` and `d3.linkVertical()` to render a deterministic, top-down vertical tree of session branches.
+*   **Hardened Parser**: Log rendering logic includes a comprehensive interaction parser with resilient fallbacks for unstructured text, ensuring 100% data visibility.
+*   **Live Sync**: Polling ensures execution logs and metadata stream in real-time as the agent works.
 
 ---
 
@@ -148,6 +168,33 @@ To prevent **Context Window Overflow**, we implement `ContextManager.trim_messag
 - **Thread Offloading**: Blocking I/O (like `shutil.copytree` for session branching) is wrapped in `asyncio.to_thread`.
 - **Decoding Robustness**: The MCP layer uses `errors='replace'` during UTF-8 decoding to prevent crashes on binary or malformed shell output.
 - **Node Isolation**: Reasoning nodes are implementation-isolated class methods, preventing state leakage between concurrent sessions.
+
+### Nuclear Reset Logic
+To support clean developer transitions and security compliance, the agent implements a `reset --nuclear` command:
+- **Filesystem Purge**: Recursively deletes the `.GCC/` directory.
+- **Database Wipe**: Closes connections and deletes `agent_intelligence.db` (SQLite).
+- **Vector Purge**: Completely removes the `.lancedb/` directory.
+- **Confirmation Flow**: Enforces a CLI-level confirmation `y/n` before execution.
+
+---
+
+## 10. Performance & Optimization (V0.2)
+
+To achieve sub-5s TTFT, the agent implements several performance-first architectural patterns.
+
+### Distributed LLM Architecture
+The system supports split-execution between the "Brain" (Heavy Reasoning) and the "Reflex" (Speculative Router) LLMs.
+*   **Brain model**: Handles the heavy `Planner` node. Usually a large, tool-capable model (e.g., `devstral:24b`).
+*   **Reflex model**: Handles the `Router` and `Chat` nodes. A smaller, low-latency model (e.g., `llama3.2:3b`).
+*   **Distributed Hosts**: The reflex model can be hosted on a separate Ollama instance (e.g., a local GPU for speed while the brain uses a remote server) via `FAST_PATH_HOST`.
+
+### Static Skill Injection
+Standard RAG systems suffer from high latency during initial retrieval. We replace dynamic skill RAG with **Static Skill Injection**:
+1.  **Startup Loading**: All `SKILL.md` files are loaded into memory at agent initialization.
+2.  **Zero-Latency Context**: Relevant skill documentation is concatenated and injected into the system prompt once per turn, ensuring constant-time access to operational patterns without vector search overhead.
+
+### Incremental Ingestion
+Context bloat is managed by **Offset-based Ingestion**. The agent tracks a `last_synced_count` for the `log.md` and only parses new entries, significantly reducing ingestion latency in long-running sessions.
 
 ---
 

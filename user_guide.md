@@ -47,8 +47,11 @@ uv run devops-agent continue_session
 ```
 
 ### The Collaboration Loop
-1.  **Chat Mode**: Type your requests. Responses stream in **token-by-token**.
-2.  **Live Status**: Watch the status bar at the bottom (`🧠 Thinking`, `🛠️ Executing`) to see what the agent is doing.
+1.  **Interaction Modes (Tab)**: You can cycle through three modes by pressing **`Tab`** on an empty input line:
+    *   **`(AUTO)`** (Blue): The default intelligent mode. Uses the Speculative Router to generated quick commands or routes to the Planner for complex tasks.
+    *   **`(EXEC)`** (Red): Forced execution mode. Directly generates terminal commands without conversational pre-analysis.
+    *   **`(CHAT)`** (Magenta): Information-only mode. Prevents accidental command execution; perfect for asking questions or explaining concepts.
+2.  **Live Status**: Watch the status bar at the bottom (`🧠 Thinking`, `🛠️ Executing`, `💬 Conversing`) to see what the agent is doing.
 3.  **Safety Gate**: If the agent proposes a sensitive command:
     *   **Approve**: Type `y` or say *"Sure, go for it"* / *"Approve"*.
     *   **Redirect**: Say *"Instead, try finding the pod first"* to pivot the AI's strategy.
@@ -56,10 +59,11 @@ uv run devops-agent continue_session
 4.  **Manual Mode**: Type `manual` in chat. You are dropped into a real shell.
 5.  **AI Summoner**: While in Manual Mode, press **Ctrl+R** to instantly return to the AI.
 
-### Advanced Multi-line Input (V0.2)
-You can now write multi-paragraph queries:
-- **Shift+Enter** / **Alt+Enter**: Add a new line.
-- **Enter**: Submit your query to the agent.
+### ⌨️ Multi-line Input Support
+For complex, multi-paragraph instructions, use high-fidelity input:
+*   **Shift+Enter** / **Alt+Enter** / **Ctrl+J**: Add a new line.
+*   **Enter**: Submit your query to the agent.
+*   *Note: Multi-line queries automatically route to the Planner node for deep reasoning.*
 
 ---
 
@@ -77,10 +81,12 @@ The Visualizer allows you to see the "Git Tree" of your work.
 3.  Open `http://localhost:5173` in your browser.
 
 ### Features
-*   **Branching Tree**: Click on any node to see what was happening in that session segment.
-*   **Live Logs**: Watch the "Execution Log" update in real-time as you or the AI work.
-*   **Theme Switch**: Toggle between Light and Dark modes in the top right.
-*   **Session Switching**: Select an old session and click **"Set Active"** to resume work from that point in time.
+*   **Three-Column HUD**: Independently scrollable panels for Navigation, Logic Graph, and Details.
+*   **Optimal Navigation**: Spacious Sidebar (`380px`) with multi-line text wrapping for long goal names.
+*   **Intelligent Filtering**: Quickly find sessions using the "Today", "Active", or "Completed" pills.
+*   **Deterministic Tree Graph**: View session lineage with clean Bezier connections and active-node "ripple" animations.
+*   **Rich Telemetry**: Peek into the "Info" tab for session-specific metrics and environment info (OS/Shell) with improved label visibility.
+*   **Secure Exports**: Download the full `log.md` or `commit.md` directly from the detail panel for offline auditing.
 
 ---
 
@@ -96,14 +102,11 @@ Currently, sessions are stored in:
 3.  **LanceDB**: `./.lancedb/`
 
 ### The "Nuclear Reset"
-To completely wipe the agent's memory and start from zero (DANGER: Cannot be undone):
+To completely wipe the agent's memory and start from zero (DANGER: Cannot be undone). This purges all session logs, SQLite metadata, and LanceDB vector memories.
 ```bash
-# We recommend a manual purge for safety:
-rm -rf ./.GCC
-rm -rf ./.lancedb
-rm agent_intelligence.db
+uv run devops-agent reset --nuclear
 ```
-*(Coming soon: `uv run devops-agent reset --nuclear`)*
+You will be prompted with an interactive `y/n` confirmation before the wipe begins.
 
 ---
 
