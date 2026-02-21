@@ -1,0 +1,223 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\Nayan\Desktop\DevOpsAgent-cli\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Nayan\Desktop\DevOpsAgent-cli
+configfile: pyproject.toml
+plugins: anyio-4.12.1, langsmith-0.7.4, asyncio-1.3.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=function, asyncio_default_test_loop_scope=function
+collecting ... collected 64 items
+
+src/tests/test_expert_audit.py::TestBUG01_PathImport::test_path_is_importable PASSED [  1%]
+src/tests/test_expert_audit.py::TestBUG01_PathImport::test_get_gcc_history_uses_path PASSED [  3%]
+src/tests/test_expert_audit.py::TestBUG02_PlatinumEnvelopeImport::test_platinum_envelope_importable PASSED [  4%]
+src/tests/test_expert_audit.py::TestBUG02_PlatinumEnvelopeImport::test_platinum_envelope_has_wrap PASSED [  6%]
+src/tests/test_expert_audit.py::TestBUG03_InitialStateKeys::test_state_typedef_has_all_keys PASSED [  7%]
+src/tests/test_expert_audit.py::TestBUG04_SanitizerNodeNoDuplication::test_sanitizer_returns_removal_pattern PASSED [  9%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_single_word_approval PASSED [ 10%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_single_word_denial PASSED [ 12%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_explain_phrases PASSED [ 14%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_approve_with_explain PASSED [ 15%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_ambiguous_fallback FAILED [ 17%]
+src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_multiword_approval_in_sentence PASSED [ 18%]
+src/tests/test_expert_audit.py::TestBUG06_NoDeprecatedAsyncio::test_no_nested_asyncio_import PASSED [ 20%]
+src/tests/test_expert_audit.py::TestBUG07_CheckpointerList::test_list_returns_stored_checkpoints PASSED [ 21%]
+src/tests/test_expert_audit.py::TestBUG08_CheckpointerPutWrites::test_put_writes_creates_file PASSED [ 23%]
+src/tests/test_expert_audit.py::TestBUG09_DynamicEmbeddingDim::test_no_hardcoded_dim_in_source PASSED [ 25%]
+src/tests/test_expert_audit.py::TestBUG10_SessionIDCollision::test_session_id_after_deletion_gap FAILED [ 26%]
+src/tests/test_expert_audit.py::TestBUG11_FileLockedAppend::test_atomic_append_uses_locking PASSED [ 28%]
+src/tests/test_expert_audit.py::TestBUG11_FileLockedAppend::test_atomic_append_writes_content FAILED [ 29%]
+src/tests/test_expert_audit.py::TestBUG12_ReadWriteSplit::test_read_execute_exists PASSED [ 31%]
+src/tests/test_expert_audit.py::TestBUG12_ReadWriteSplit::test_execute_docstring_mentions_write PASSED [ 32%]
+src/tests/test_expert_audit.py::TestBUG13_ConditionalMsvcrt::test_no_toplevel_msvcrt PASSED [ 34%]
+src/tests/test_expert_audit.py::TestBUG14_NoBarExcept::test_no_bare_except_pass PASSED [ 35%]
+src/tests/test_expert_audit.py::TestBUG15_PEP8BlankLine::test_blank_line_between_classes PASSED [ 37%]
+src/tests/test_expert_audit.py::TestBUG16_NoDuplicateListCall::test_single_list_call PASSED [ 39%]
+src/tests/test_expert_audit.py::TestBUG17_SessionIDPassthrough::test_start_agent_accepts_session_id PASSED [ 40%]
+src/tests/test_expert_audit.py::TestBUG17_SessionIDPassthrough::test_continue_session_passes_session_id PASSED [ 42%]
+src/tests/test_expert_audit.py::TestBUG18_CachedSysInfo::test_single_get_system_info_in_run FAILED [ 43%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_docker_ps_is_auto FAILED [ 45%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_kubectl_get_is_auto FAILED [ 46%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_kubectl_delete_is_destructive FAILED [ 48%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_git_push_force_is_destructive FAILED [ 50%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_unknown_command_defaults_requires_approval FAILED [ 51%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_helm_list_is_auto FAILED [ 53%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_helm_uninstall_is_destructive FAILED [ 54%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_git_log_is_auto FAILED [ 56%]
+src/tests/test_expert_audit.py::TestSkillsParser::test_docker_rm_is_destructive FAILED [ 57%]
+src/tests/test_expert_audit.py::TestGCCSession::test_create_session FAILED [ 59%]
+src/tests/test_expert_audit.py::TestGCCSession::test_list_sessions FAILED [ 60%]
+src/tests/test_expert_audit.py::TestGCCSession::test_session_sequential_ids FAILED [ 62%]
+src/tests/test_expert_audit.py::TestGCCLogger::test_log_ai_action FAILED [ 64%]
+src/tests/test_expert_audit.py::TestGCCLogger::test_log_human_action FAILED [ 65%]
+src/tests/test_expert_audit.py::TestGCCIngestor::test_parse_empty_log PASSED [ 67%]
+src/tests/test_expert_audit.py::TestGCCIngestor::test_parse_log_with_entries PASSED [ 68%]
+src/tests/test_expert_audit.py::TestConfig::test_config_loads PASSED     [ 70%]
+src/tests/test_expert_audit.py::TestConfig::test_config_classes_have_blank_lines PASSED [ 71%]
+src/tests/test_expert_audit.py::TestOllamaClient::test_single_list_in_health_check PASSED [ 73%]
+src/tests/test_expert_audit.py::TestCLIEntryPoints::test_new_command_exists FAILED [ 75%]
+src/tests/test_expert_audit.py::TestCLIEntryPoints::test_continue_command_exists FAILED [ 76%]
+src/tests/test_expert_audit.py::TestCLIEntryPoints::test_list_command_exists FAILED [ 78%]
+src/tests/test_expert_audit.py::TestStartAgentSessionResolution::test_start_agent_signature PASSED [ 79%]
+src/tests/test_expert_audit.py::TestVisualizerAPI::test_session_tree_endpoint_exists PASSED [ 81%]
+src/tests/test_expert_audit.py::TestVisualizerAPI::test_session_content_endpoint_exists PASSED [ 82%]
+src/tests/test_expert_audit.py::TestVisualizerAPI::test_activate_endpoint_exists PASSED [ 84%]
+src/tests/test_expert_audit.py::TestRedactor::test_redacts_api_keys FAILED [ 85%]
+src/tests/test_expert_audit.py::TestRedactor::test_redacts_password_fields FAILED [ 87%]
+src/tests/test_expert_audit.py::TestSanitizer::test_strips_ansi_codes PASSED [ 89%]
+src/tests/test_expert_audit.py::TestSanitizer::test_neutralizes_adversarial_patterns PASSED [ 90%]
+src/tests/test_expert_audit.py::TestAtomicWrites::test_atomic_write_creates_file PASSED [ 92%]
+src/tests/test_expert_audit.py::TestAtomicWrites::test_atomic_write_overwrites PASSED [ 93%]
+src/tests/test_expert_audit.py::TestAtomicWrites::test_concurrent_appends_dont_corrupt FAILED [ 95%]
+src/tests/test_expert_audit.py::TestEnvironmentDetection::test_get_system_info_returns_dict PASSED [ 96%]
+src/tests/test_expert_audit.py::TestEnvironmentDetection::test_env_hash_deterministic PASSED [ 98%]
+src/tests/test_expert_audit.py::TestEnvironmentDetection::test_env_hash_changes_with_different_input PASSED [100%]
+
+================================== FAILURES ===================================
+______ TestBUG05_IntentParserOperatorPrecedence.test_ambiguous_fallback _______
+src\tests\test_expert_audit.py:105: in test_ambiguous_fallback
+    assert parser.parse("I'm not sure about this") == "AMBIGUOUS"
+E   AssertionError: assert 'APPROVE' == 'AMBIGUOUS'
+E     
+E     - AMBIGUOUS
+E     + APPROVE
+_______ TestBUG10_SessionIDCollision.test_session_id_after_deletion_gap _______
+src\tests\test_expert_audit.py:182: in test_session_id_after_deletion_gap
+    sm = SessionManager(tmpdir)
+         ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: SessionManager.__init__() takes 1 positional argument but 2 were given
+________ TestBUG11_FileLockedAppend.test_atomic_append_writes_content _________
+src\tests\test_expert_audit.py:218: in test_atomic_append_writes_content
+    GCCStorage.atomic_append(tmp_path, "Line 2\n")
+src\gcc\storage.py:36: in atomic_append
+    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+E   PermissionError: [Errno 13] Permission denied
+_________ TestBUG18_CachedSysInfo.test_single_get_system_info_in_run __________
+src\tests\test_expert_audit.py:313: in test_single_get_system_info_in_run
+    assert count == 1, f"Expected 1 call to get_system_info(), found {count}"
+E   AssertionError: Expected 1 call to get_system_info(), found 2
+E   assert 2 == 1
+___________________ TestSkillsParser.test_docker_ps_is_auto ___________________
+src\tests\test_expert_audit.py:324: in test_docker_ps_is_auto
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+__________________ TestSkillsParser.test_kubectl_get_is_auto __________________
+src\tests\test_expert_audit.py:330: in test_kubectl_get_is_auto
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+_____________ TestSkillsParser.test_kubectl_delete_is_destructive _____________
+src\tests\test_expert_audit.py:336: in test_kubectl_delete_is_destructive
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+_____________ TestSkillsParser.test_git_push_force_is_destructive _____________
+src\tests\test_expert_audit.py:341: in test_git_push_force_is_destructive
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+______ TestSkillsParser.test_unknown_command_defaults_requires_approval _______
+src\tests\test_expert_audit.py:346: in test_unknown_command_defaults_requires_approval
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+___________________ TestSkillsParser.test_helm_list_is_auto ___________________
+src\tests\test_expert_audit.py:351: in test_helm_list_is_auto
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+_____________ TestSkillsParser.test_helm_uninstall_is_destructive _____________
+src\tests\test_expert_audit.py:356: in test_helm_uninstall_is_destructive
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+____________________ TestSkillsParser.test_git_log_is_auto ____________________
+src\tests\test_expert_audit.py:361: in test_git_log_is_auto
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+_______________ TestSkillsParser.test_docker_rm_is_destructive ________________
+src\tests\test_expert_audit.py:366: in test_docker_rm_is_destructive
+    c = PermissionClassifier()
+        ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: PermissionClassifier.__init__() missing 1 required positional argument: 'skills_dir'
+_____________________ TestGCCSession.test_create_session ______________________
+src\tests\test_expert_audit.py:380: in test_create_session
+    sm = SessionManager(tmpdir)
+         ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: SessionManager.__init__() takes 1 positional argument but 2 were given
+______________________ TestGCCSession.test_list_sessions ______________________
+src\tests\test_expert_audit.py:394: in test_list_sessions
+    sm = SessionManager(tmpdir)
+         ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: SessionManager.__init__() takes 1 positional argument but 2 were given
+_________________ TestGCCSession.test_session_sequential_ids __________________
+src\tests\test_expert_audit.py:405: in test_session_sequential_ids
+    sm = SessionManager(tmpdir)
+         ^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: SessionManager.__init__() takes 1 positional argument but 2 were given
+______________________ TestGCCLogger.test_log_ai_action _______________________
+src\tests\test_expert_audit.py:424: in test_log_ai_action
+    logger.log_ai_action(
+src\gcc\log.py:54: in log_ai_action
+    entry = OTAEntry(**kwargs)
+            ^^^^^^^^^^^^^^^^^^
+E   TypeError: OTAEntry.__init__() got an unexpected keyword argument 'reasoning'
+_____________________ TestGCCLogger.test_log_human_action _____________________
+src\tests\test_expert_audit.py:443: in test_log_human_action
+    logger.log_human_action("docker ps -a")
+E   TypeError: GCCLogger.log_human_action() missing 1 required positional argument: 'output'
+_________________ TestCLIEntryPoints.test_new_command_exists __________________
+src\tests\test_expert_audit.py:516: in test_new_command_exists
+    assert 'new' in commands
+E   AssertionError: assert 'new' in [None, None, None]
+_______________ TestCLIEntryPoints.test_continue_command_exists _______________
+src\tests\test_expert_audit.py:521: in test_continue_command_exists
+    assert 'continue-session' in commands or 'continue_session' in commands
+E   AssertionError: assert ('continue-session' in [None, None, None] or 'continue_session' in [None, None, None])
+_________________ TestCLIEntryPoints.test_list_command_exists _________________
+src\tests\test_expert_audit.py:526: in test_list_command_exists
+    assert 'list-sessions' in commands or 'list_sessions' in commands
+E   AssertionError: assert ('list-sessions' in [None, None, None] or 'list_sessions' in [None, None, None])
+_____________________ TestRedactor.test_redacts_api_keys ______________________
+src\tests\test_expert_audit.py:573: in test_redacts_api_keys
+    redacted = Redactor.redact(text)
+               ^^^^^^^^^^^^^^^
+E   AttributeError: type object 'Redactor' has no attribute 'redact'
+__________________ TestRedactor.test_redacts_password_fields __________________
+src\tests\test_expert_audit.py:580: in test_redacts_password_fields
+    redacted = Redactor.redact(text)
+               ^^^^^^^^^^^^^^^
+E   AttributeError: type object 'Redactor' has no attribute 'redact'
+____________ TestAtomicWrites.test_concurrent_appends_dont_corrupt ____________
+src\tests\test_expert_audit.py:640: in test_concurrent_appends_dont_corrupt
+    GCCStorage.atomic_append(path, f"Entry {i}\n")
+src\gcc\storage.py:36: in atomic_append
+    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+E   PermissionError: [Errno 13] Permission denied
+=========================== short test summary info ===========================
+FAILED src/tests/test_expert_audit.py::TestBUG05_IntentParserOperatorPrecedence::test_ambiguous_fallback
+FAILED src/tests/test_expert_audit.py::TestBUG10_SessionIDCollision::test_session_id_after_deletion_gap
+FAILED src/tests/test_expert_audit.py::TestBUG11_FileLockedAppend::test_atomic_append_writes_content
+FAILED src/tests/test_expert_audit.py::TestBUG18_CachedSysInfo::test_single_get_system_info_in_run
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_docker_ps_is_auto
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_kubectl_get_is_auto
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_kubectl_delete_is_destructive
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_git_push_force_is_destructive
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_unknown_command_defaults_requires_approval
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_helm_list_is_auto
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_helm_uninstall_is_destructive
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_git_log_is_auto
+FAILED src/tests/test_expert_audit.py::TestSkillsParser::test_docker_rm_is_destructive
+FAILED src/tests/test_expert_audit.py::TestGCCSession::test_create_session - ...
+FAILED src/tests/test_expert_audit.py::TestGCCSession::test_list_sessions - T...
+FAILED src/tests/test_expert_audit.py::TestGCCSession::test_session_sequential_ids
+FAILED src/tests/test_expert_audit.py::TestGCCLogger::test_log_ai_action - Ty...
+FAILED src/tests/test_expert_audit.py::TestGCCLogger::test_log_human_action
+FAILED src/tests/test_expert_audit.py::TestCLIEntryPoints::test_new_command_exists
+FAILED src/tests/test_expert_audit.py::TestCLIEntryPoints::test_continue_command_exists
+FAILED src/tests/test_expert_audit.py::TestCLIEntryPoints::test_list_command_exists
+FAILED src/tests/test_expert_audit.py::TestRedactor::test_redacts_api_keys - ...
+FAILED src/tests/test_expert_audit.py::TestRedactor::test_redacts_password_fields
+FAILED src/tests/test_expert_audit.py::TestAtomicWrites::test_concurrent_appends_dont_corrupt
+======================== 24 failed, 40 passed in 6.42s ========================

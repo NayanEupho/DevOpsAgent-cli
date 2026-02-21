@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+.env
+.env.local
+
+# Databases and Local State
+.GCC/
+.lancedb/
+*.db
+*.db-journal
+
+# Logs and artifacts
+*.log
+exports/
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Visualizer
+src/cli/visualizer/node_modules/
+src/cli/visualizer/dist/
+
+# Expert Hardening
+panic_state.json
+.langfuse_data/
