@@ -5,16 +5,12 @@ from typing import List, Dict, Any, Optional
 from loguru import logger
 from .database import DatabaseService
 from .metadata import MetadataService
-from .vector import VectorService
-from .utils import PlatinumEnvelope, MarkdownAwareChunker
-
 class IntelligenceRegistry:
     _instance = None
 
     def __init__(self):
         self.db = DatabaseService()
         self.metadata = MetadataService(self.db)
-        self.vector = VectorService()
         self._initialized = False
         self._background_tasks = set() # Phase O: Track orphans for graceful exit
 
@@ -32,11 +28,8 @@ class IntelligenceRegistry:
         # Connect to DB first as metadata sync depends on it
         await self.db.connect()
         
-        # Connect to vector and sync metadata in parallel
-        await asyncio.gather(
-            asyncio.to_thread(self.vector.connect),
-            self.metadata.sync_all()
-        )
+        # Sync metadata
+        await self.metadata.sync_all()
         
         self._initialized = True
         logger.info("IntelligenceRegistry: Orchestration layer active.")
@@ -60,83 +53,6 @@ class IntelligenceRegistry:
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
-
-    async def remember(self, query: str, limit: int = 5) -> str:
-        """High-level RAG retrieval with logic-based re-ranking (Recency + Similarity)."""
-        hits = await self.vector.search(query, limit=limit * 2) # Over-fetch for re-ranking
-        if not hits:
-            return ""
-
-        # Expert Hardening Phase K: Recency-aware re-ranking
-        from datetime import datetime
-        now = datetime.now()
-        
-        scored_hits = []
-        for hit in hits:
-            meta = hit["metadata"]
-            score = hit["score"]
-            
-            # Extract timestamp from session_id (session_NNN_YYYY-MM-DD...)
-            # Fallback to current time if unparseable
-            try:
-                sid = meta.get("session_id", "")
-                import re
-                match = re.search(r"(\d{4}-\d{2}-\d{2})", sid)
-                if match:
-                    created_at = datetime.strptime(match.group(1), "%Y-%m-%d")
-                    days_old = max((now - created_at).days, 1)
-                    # Decay formula: Score * (1 / log(days+1.5)) - gentle decay
-                    import math
-                    temporal_weight = 1.0 / math.log(days_old + 1.5)
-                    score = score * (0.7 + 0.3 * temporal_weight)
-            except Exception:
-                pass
-            
-            # Expert Hardening Phase N: Success-Based Reranking
-            try:
-                if sid:
-                    # Check session status in DB (Simple caching can be added for high-load)
-                    session_rows = await self.db.read_execute("SELECT status FROM sessions WHERE id = ?", (sid,))
-                    if session_rows and session_rows[0][0] == "SUCCESS":
-                        # 20% boost for successful sessions
-                        score = score * 1.2
-                        logger.debug(f"RAG: Success Boost applied to session {sid}")
-            except Exception:
-                pass
-
-            # Expert Hardening: Ensure metadata is a dict and score is a float
-            try:
-                import json
-                if isinstance(meta, str):
-                    meta = json.loads(meta)
-                score = float(score)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                logger.warning(f"RAG: Metadata for hit in {sid} is malformed.")
-                continue
-
-            scored_hits.append((score, hit, meta))
-            
-        # Sort by final decayed score
-        scored_hits.sort(key=lambda x: x[0], reverse=True)
-        top_hits = [h[1:] for h in scored_hits[:limit]]
-
-        context_blocks = []
-        for hit_data in top_hits:
-            hit, meta = hit_data
-            source = meta.get("skill_name") or meta.get("session_id", "History")
-            
-            envelope = PlatinumEnvelope.wrap(
-                source=source,
-                content=hit["text"],
-                metadata={
-                    "session_id": meta.get("session_id", "N/A"),
-                    "score": f"{hit['score']:.2f}",
-                    "context_type": meta.get("type", "memory")
-                }
-            )
-            context_blocks.append(envelope)
-        
-        return "\n\n".join(context_blocks)
 
     async def list_sessions(self, query: Optional[str] = None) -> str:
         """Search or list sessions from SQLite."""
@@ -226,13 +142,11 @@ class IntelligenceRegistry:
     async def delete_session(self, session_id: str):
         """Full purge of a session from intelligence."""
         await self.db.delete_session(session_id)
-        self.vector.delete_session_memories(session_id)
         logger.warning(f"IntelligenceRegistry: Purged session {session_id}")
 
     async def reset_intelligence(self, include_gcc: bool = False):
         """Base reset to fresh state. If include_gcc is True, deletes all session files."""
         await self.db.reset_all()
-        self.vector.reset_all()
         
         if include_gcc:
             gcc_sessions_path = Path(self.db.db_path).parent / "sessions"
@@ -242,19 +156,3 @@ class IntelligenceRegistry:
                 logger.warning(f"IntelligenceRegistry: PURGED GCC directory at {gcc_sessions_path}")
                 
         logger.critical("IntelligenceRegistry: FULL SYSTEM RESET PERFORMED.")
-
-    async def index_session_log(self, session_id: str, new_text: str):
-        """Shadow Indexing: Background vectorization of new log content."""
-        chunks = MarkdownAwareChunker.chunk_text(new_text)
-        metadatas = [{"session_id": session_id, "type": "history"}] * len(chunks)
-        
-        # We run this in the background to avoid blocking turn-around
-        # Phase 13 Hardening: Add error callback
-        def _err_handler(fut):
-            try:
-                fut.result()
-            except Exception as e:
-                logger.error(f"IntelligenceRegistry: Background indexing failed: {e}")
-
-        task = self.track_task(self.vector.add_texts(chunks, metadatas))
-        task.add_done_callback(_err_handler)

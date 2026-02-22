@@ -37,16 +37,7 @@ class OllamaClient:
                     logger.error(f"LLM Model '{self.model}' not found in Ollama.")
                     return False
             
-            # Check Embedding Model
-            embed_model = config.ollama.embedding_model
-            if embed_model not in model_names:
-                if ":" not in embed_model and f"{embed_model}:latest" in model_names:
-                    pass
-                else:
-                    logger.error(f"Embedding Model '{embed_model}' not found in Ollama.")
-                    return False
-            
-            logger.info(f"Ollama models ready: LLM={self.model}, Embed={embed_model}")
+            logger.info(f"Ollama model ready: LLM={self.model}")
             return True
         except Exception as e:
             logger.error(f"Ollama health check failed: {e}")

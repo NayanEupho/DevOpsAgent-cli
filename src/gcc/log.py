@@ -22,13 +22,12 @@ class OTAEntry:
         self.inference = Redactor.redact_text(inference)
 
     def to_markdown(self) -> str:
+        # User requested AI: <cmd> format
         return f"""
-## [{self.timestamp}] AI
+## [{self.timestamp}] AI: {self.action}
 **OBSERVATION:** {self.observation if self.observation else "N/A"}
 
 **THOUGHT:** {self.thought if self.thought else "N/A"}
-
-**ACTION:** `{self.action}`
 
 **OUTPUT:**
 ```bash
@@ -52,10 +51,9 @@ class HumanEntry:
             self.output = raw_output
 
     def to_markdown(self) -> str:
+        # User requested Human: <cmd> format
         return f"""
-## [{self.timestamp}] HUMAN
-**COMMAND:** `{self.command}`
-
+## [{self.timestamp}] Human: {self.command}
 **OUTPUT:**
 ```bash
 {self.output if self.output else "(No output)"}

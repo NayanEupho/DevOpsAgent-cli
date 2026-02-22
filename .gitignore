@@ -16,7 +16,6 @@ wheels/
 
 # Databases and local agent state
 .GCC/
-.lancedb/
 *.db
 *.db-journal
 
@@ -38,9 +37,11 @@ src/cli/visualizer/.env.local
 panic_state.json
 .langfuse_data/
 
-# Benchmarks and temporary scripts
+# Benchmarks, reports, and temporary scripts
 benchmark_*.py
 benchmark_*.txt
+benchmark_report*.txt
+report_*.txt
 verify_*.py
 verify_*.txt
 test_*.py
@@ -53,3 +54,10 @@ final_verify.py
 .pytest_cache/
 test_gcc_logs_isolated/
 test_chaos_path/
+
+# Reference project (large external codebase, not part of this repo)
+Reference Project/
+
+# Local dev notes (not for version control)
+GCC_git.md
+Langfuse_use.md

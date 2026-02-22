@@ -16,7 +16,7 @@ class DatabaseService:
             return
             
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = await aiosqlite.connect(self.db_path)
+        self._conn = await aiosqlite.connect(self.db_path, timeout=15)
         
         # Enable WAL mode for concurrency
         await self._conn.execute("PRAGMA journal_mode=WAL")

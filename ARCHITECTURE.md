@@ -11,7 +11,7 @@ The DevOps Agent is a **multi-layered orchestrator** that bridges the gap betwee
 ### High-Level Layers
 1.  **Orchestration Layer**: Powered by **LangGraph**, managing the stateful reasoning loop with **Phase 13 Hardening** (node isolation and error handling).
 2.  **Memory Layer (GCC)**: The "Project Memory" that stores logs, findings, and lineage in an atomic, human-readable format.
-3.  **Intelligence Layer**: A hybrid persistence system using **SQLite** for structured metadata and **LanceDB** for vector-based semantic retrieval with **Context Truncation**.
+3.  **Intelligence Layer**: A structured persistence system using **SQLite** for session metadata, skill usage stats, and command history. Semantic retrieval is handled via **Static Skill Injection** (zero-latency, no vector search).
 4.  **Interface Layer**: The **CLI Controller** and **Visualizer API/Frontend** for user interaction.
 
 ---
@@ -79,20 +79,17 @@ When a session is resumed, GCC performs a **Differential Sync**:
 
 ---
 
-## 4. Intelligence Layer: Hybrid Retrieval
+## 4. Intelligence Layer: SQLite-Backed Metadata
 
-We solve the "Context Bloat" problem by separating immediate state from long-term memory.
+All persistent agent state is stored in a single **SQLite** database (`intelligence.db`). RAG and vector search were decommissioned in favour of **Static Skill Injection** which gives zero-latency, constant-time context at no retrieval cost.
 
 | Component | Technology | Role |
 | :--- | :--- | :--- |
 | **Relational** | SQLite | Tracks sessions, forking lineage, skill usage, and command statistics. |
-| **Semantic** | LanceDB | Stores vector embeddings of all past session logs and skill definitions. |
-| **Ingestion** | Platinum Envelopes | Wraps every memory in a structured XML/JSON boundary to preserve metadata during RAG. |
+| **Skill Context** | Static Injection | All `SKILL.md` files loaded once into memory at startup and concatenated into the system prompt each turn. No vector search needed. |
+| **Incremental Ingestion** | Offset-based | GCC `log.md` is only read from `last_synced_count`, keeping ingestion O(delta) not O(total). |
 
-### Semantic Retrieval Flow
-1.  Input: *"I remember fixing this in the prod cluster yesterday."*
-2.  Search: Agent performs a vector search in LanceDB across all `session_id` tags.
-3.  Result: The "Platinum Envelope" of the relevant session is retrieved and injected into the Planner's system prompt.
+> **Why RAG was removed**: Dynamic retrieval added 1–3s latency per turn with no accuracy benefit over static injection at the current skill-set size. The vector store (LanceDB) was a dependency with no return.
 
 ---
 
@@ -172,29 +169,40 @@ To prevent **Context Window Overflow**, we implement `ContextManager.trim_messag
 ### Nuclear Reset Logic
 To support clean developer transitions and security compliance, the agent implements a `reset --nuclear` command:
 - **Filesystem Purge**: Recursively deletes the `.GCC/` directory.
-- **Database Wipe**: Closes connections and deletes `agent_intelligence.db` (SQLite).
-- **Vector Purge**: Completely removes the `.lancedb/` directory.
+- **Database Wipe**: Closes connections and deletes `intelligence.db` (SQLite).
 - **Confirmation Flow**: Enforces a CLI-level confirmation `y/n` before execution.
 
 ---
 
-## 10. Performance & Optimization (V0.2)
+## 10. Performance & Optimization (V0.3 — Phase 6 Hardened)
 
 To achieve sub-5s TTFT, the agent implements several performance-first architectural patterns.
+
+### Phase 6: Stability & Windows Hardening
+
+Phase 6 addressed systemic hangs and crashes identified during benchmark profiling on Windows:
+
+| Fix | Root Cause | Solution |
+|---|---|---|
+| **Probe timeout** | `docker info` on unreachable daemon hung forever | `asyncio.wait_for(..., timeout=5.0)` in `run_probe()` |
+| **Stable env hash** | Raw `kubectl` error strings varied per call → false drift → reprobe loop | Hash now uses `kubectl_active: bool` instead of raw error dict |
+| **Audit double-probe** | `audit_node` called `get_system_info()` independently of turn-level cache | `audit_node` now strictly uses `self.cached_sys_info` |
+| **FastPath None-guard** | `_detect_and_handle_pivot` crashed when `FAST_PATH_ENABLED=false` | Added `and self.fast_llm is not None` guard before invocation |
+| **SQLite WAL lock** | Registry singleton held WAL lock across benchmark scenarios | Added `timeout=15` to `aiosqlite.connect()` + background task drain before close |
 
 ### Distributed LLM Architecture
 The system supports split-execution between the "Brain" (Heavy Reasoning) and the "Reflex" (Speculative Router) LLMs.
 *   **Brain model**: Handles the heavy `Planner` node. Usually a large, tool-capable model (e.g., `devstral:24b`).
 *   **Reflex model**: Handles the `Router` and `Chat` nodes. A smaller, low-latency model (e.g., `llama3.2:3b`).
-*   **Distributed Hosts**: The reflex model can be hosted on a separate Ollama instance (e.g., a local GPU for speed while the brain uses a remote server) via `FAST_PATH_HOST`.
+*   **Distributed Hosts**: The reflex model can be hosted on a separate Ollama instance via `FAST_PATH_HOST`.
 
 ### Static Skill Injection
-Standard RAG systems suffer from high latency during initial retrieval. We replace dynamic skill RAG with **Static Skill Injection**:
+Replaces dynamic RAG with **Static Skill Injection**:
 1.  **Startup Loading**: All `SKILL.md` files are loaded into memory at agent initialization.
-2.  **Zero-Latency Context**: Relevant skill documentation is concatenated and injected into the system prompt once per turn, ensuring constant-time access to operational patterns without vector search overhead.
+2.  **Zero-Latency Context**: Relevant skill documentation is concatenated into the system prompt once per turn — constant-time access, no vector search overhead.
 
 ### Incremental Ingestion
-Context bloat is managed by **Offset-based Ingestion**. The agent tracks a `last_synced_count` for the `log.md` and only parses new entries, significantly reducing ingestion latency in long-running sessions.
+Context bloat is managed by **Offset-based Ingestion**. The agent tracks `last_synced_count` for `log.md` and only parses new entries, significantly reducing ingestion latency in long-running sessions.
 
 ---
 

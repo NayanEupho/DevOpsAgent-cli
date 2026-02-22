@@ -66,45 +66,76 @@ class PermissionClassifier:
 
         return skill
 
-    def classify(self, command: str) -> str:
-        command = command.strip()
+    def classify(self, command: str) -> tuple[str, Optional[str]]:
+        """
+        Classifies a command and returns (tier, matched_pattern).
+        Claude Code Pattern: Anti-hallucination validation on match.
+        """
+        command = (command or "").strip()
+        if not command:
+            return "requires_approval", None
         
         # Check all skills
         for skill_name, skill in self.skills.items():
+            # Ensure lists are iterable even if Pydantic model state is weird
+            destructive = skill.destructive or []
+            requires_approval = skill.requires_approval or []
+            auto_execute = skill.auto_execute or []
+
             # Check destructive first (highest priority)
-            if self._matches_any(command, skill.destructive):
-                return "destructive"
+            for pattern in destructive:
+                if self._matches_logic(command, pattern) and self._verify_match(command, pattern):
+                    return "destructive", pattern
             
             # Then requires_approval
-            if self._matches_any(command, skill.requires_approval):
-                return "requires_approval"
+            for pattern in requires_approval:
+                if self._matches_logic(command, pattern) and self._verify_match(command, pattern):
+                    return "requires_approval", pattern
             
             # Then auto_execute
-            if self._matches_any(command, skill.auto_execute):
-                return "auto_execute"
+            for pattern in auto_execute:
+                if self._matches_logic(command, pattern) and self._verify_match(command, pattern):
+                    return "auto_execute", pattern
         
         # Default fallback
-        return "requires_approval"
+        return "requires_approval", None
 
-    def _matches_any(self, command: str, patterns: List[str]) -> bool:
+    def _matches_logic(self, command: str, pattern: str) -> bool:
+        """Core glob/exact matching logic."""
         command = command.strip()
-        for pattern in patterns:
-            pattern = pattern.strip()
-            # 1. Exact match
-            if command == pattern:
+        pattern = pattern.strip()
+        # 1. Exact match
+        if command == pattern:
+            return True
+        # 2. Glob match
+        if fnmatch.fnmatch(command, pattern):
+            return True
+        # 3. Intelligent "Base Command" match for trailing wildcards
+        if pattern.endswith(" *"):
+            base = pattern[:-2].strip()
+            if command == base:
                 return True
-            # 2. Glob match
-            if fnmatch.fnmatch(command, pattern):
+        if pattern.endswith("*"):
+            base = pattern[:-1].strip()
+            if command == base:
                 return True
-            # 3. Intelligent "Base Command" match for trailing wildcards
-            # Pattern "docker ps *" should match "docker ps"
-            if pattern.endswith(" *"):
-                base = pattern[:-2].strip()
-                if command == base:
-                    return True
-            # Pattern "docker ps*" (no space) should match "docker ps"
-            if pattern.endswith("*"):
-                base = pattern[:-1].strip()
-                if command == base:
-                    return True
         return False
+
+    def _verify_match(self, command: str, pattern: str) -> bool:
+        """
+        Anti-Hallucination Guard (Claude Code L74 fix).
+        Validates that the command actually belongs to the matched toolkit.
+        Example: 'git checkout --' should not match a broad 'git *' if it's actually 'docker git-something'
+        """
+        cmd_parts = command.split()
+        pat_parts = pattern.split()
+        
+        if not cmd_parts or not pat_parts:
+            return True # Fallback for empty strings
+            
+        # Ensure the first token matches (unless pattern is a naked wildcard)
+        if pat_parts[0] != "*" and cmd_parts[0] != pat_parts[0]:
+            logger.warning(f"Safety: Command '{command}' failed anti-hallucination check for pattern '{pattern}'")
+            return False
+            
+        return True

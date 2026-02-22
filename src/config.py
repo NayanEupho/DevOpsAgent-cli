@@ -7,7 +7,6 @@ from loguru import logger
 class OllamaConfig(BaseSettings):
     host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
     model: str = Field(default="devstral:24b", alias="OLLAMA_MODEL")
-    embedding_model: str = Field(default="nomic-embed-text", alias="EMBEDDING_MODEL")
     temperature: float = Field(default=0.3, alias="OLLAMA_TEMPERATURE")
     context_size: int = Field(default=32768, alias="OLLAMA_CONTEXT_SIZE")
     timeout: int = Field(default=120, alias="OLLAMA_TIMEOUT")

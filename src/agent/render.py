@@ -157,3 +157,36 @@ class RenderController:
         self.console.print(Text("━" * self.width, style="bold cyan"))
         self.console.print(banner)
         self.console.print(Text("━" * self.width, style="bold cyan"))
+
+    @staticmethod
+    def render_direct_command(cmd: str, output: str):
+        """
+        Phase 4: Render a human-executed !cmd result.
+        Right-aligned panel to visually distinguish from AI tool results.
+        """
+        _console = Console()
+        
+        # Truncate display for very long outputs
+        lines = output.splitlines()
+        if len(lines) > 80:
+            display_output = "\n".join(lines[:40]) + f"\n\n... ({len(lines)-80} lines hidden) ...\n\n" + "\n".join(lines[-40:])
+        else:
+            display_output = output
+
+        # Auto-detect syntax for highlighting
+        syntax_lang = "text"
+        if output.strip().startswith("{") or output.strip().startswith("["): syntax_lang = "json"
+        elif "apiVersion:" in output: syntax_lang = "yaml"
+        
+        sanitized = Sanitizer.sanitize(display_output)
+
+        _console.print(Panel(
+            Syntax(sanitized, syntax_lang, theme="monokai", background_color="default"),
+            title=f"[bold green]👤 Human: {cmd}[/bold green]",
+            title_align="right",
+            subtitle="[dim]Direct Execution[/dim]",
+            subtitle_align="right",
+            style="green",
+            box=ROUNDED,
+            expand=True
+        ))

@@ -1,5 +1,5 @@
 # DevOps Agent — Product Requirements Document
-**Version:** 3.1 | **Status: COMPLETED** | **Prepared for:** Antigravity | **Date:** February 2026
+**Version:** 3.2 | **Status: ACTIVE** | **Prepared for:** Antigravity | **Date:** February 2026
 
 ---
 
@@ -106,13 +106,14 @@ The agent is built on a single universal CLI MCP server rather than per-command 
 | GCC Memory Layer | Python | Persistent versioned memory. Manages sessions, log.md, commit.md, metadata.yaml. |
 | Session Manager | Python | Handles create, continue, list, delete, archive of sessions. |
 | Ollama Client | Python | Wraps `ollama` Python SDK (async). All model config driven from `.env` via `pydantic-settings`. |
-| Context Injector | Python | Injects cluster context, namespace, git branch, docker context, and last session state into agent system prompt. |
-| Output Formatter | Python | Truncates and structures raw CLI output for LLM consumption. |
+| Context Injector | Python | Injects cluster context, namespace, git branch, docker context, and last session state into agent system prompt via **Static Skill Injection** (no vector search). |
+| Output Formatter | Python | Truncates and structures raw CLI output for LLM consumption. Supports disk-spill for outputs >8,000 chars. |
 | Explanation Engine | Python | Generates contextual explanations using session log. |
 | Permission Negotiator | Python | Surfaces alternatives or argues the case using session log as evidence. |
 | NL Intent Parser | Python | Classifies user permission responses. Keyword-based matching. |
 | Mode Controller | Python | Manages CHAT/MANUAL mode switching. **Smart Shell Detection:** Automatically spawns `powershell.exe` on Windows and `/bin/bash` on Linux for manual drops. |
 | UI Logger | Python | Handles streaming output and beautiful terminal rendering using `Rich`. |
+| Intelligence Registry | Python | **SQLite-backed** singleton managing session metadata, skill usage stats, and command history. WAL-mode enabled with 15s busy timeout. |
 
 ### 4.3 Execution Pipeline
 
@@ -969,7 +970,7 @@ devops-agent/
 | Phase 3 | Week 3–4 | User Experience: Manual mode, explanation engine, CLI UX | ✅ COMPLETED |
 | Phase 4 | Week 4–5 | Session Management: Session list/delete/archive, resume summary | ✅ COMPLETED |
 | Phase 5 | Week 5–6 | Negotiation & Polish: Alternatives on denial, streaming output | ✅ COMPLETED |
-| Phase 6 | Week 6–7 | Intelligence Layer: SQLite tracking, LanceDB vector search | ✅ COMPLETED |
+| Phase 6 | Week 6–7 | Intelligence Layer: SQLite tracking, skill usage, command history | ✅ COMPLETED |
 | Phase 7 | Week 7–8 | Advanced Extensions: Helm support, Session Branch & Merge | ✅ COMPLETED |
 | Phase 8 | Week 8–9 | Observability: LangSmith integration, PII Redaction layer | ✅ COMPLETED |
 | Phase 9 | Week 9–10 | Visualization: D3.js Tree, FastAPI bridge, React Dashboard | ✅ COMPLETED |
@@ -979,6 +980,7 @@ devops-agent/
 | Phase 14 | Week 14–15 | **Audit & Hardening**: PII masking, Context Truncation, Async safety | ✅ COMPLETED |
 | Phase 15 | Week 15–16 | **Nuclear Reset**: Full state purging, safety confirmation prompts | ✅ COMPLETED |
 | Phase 16 | Week 16–17 | **High-Fidelity Visualizer**: D3 tree overhaul, parser hardening, UI cleanup | ✅ COMPLETED |
+| Phase 17 | Week 17–18 | **Stability Hardening**: RAG decommission, probe timeouts, DB lock fix, env hash stability | ✅ COMPLETED |
 
 ---
 
@@ -1114,4 +1116,4 @@ devops-agent/
 
 ---
 
-*DevOps Agent PRD v3.0 · Prepared for Antigravity · Confidential · February 2026*
+*DevOps Agent PRD v3.2 · Prepared for Antigravity · Confidential · February 2026*

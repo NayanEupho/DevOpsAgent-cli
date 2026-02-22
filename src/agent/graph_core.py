@@ -26,6 +26,7 @@ from rich.text import Text
 from src.intelligence.registry import IntelligenceRegistry
 from src.intelligence.utils import MarkdownAwareChunker, PlatinumEnvelope
 from src.intelligence.observability import ObservabilityService
+from src.agent.fast_tools import fast_ls, fast_read, fast_find, fast_grep
 
 console = Console()
 
@@ -175,8 +176,12 @@ class LangGraphAgent:
         # Bind LangChain tools to LLM
         self.tools = [
             langchain_run_command, 
+            fast_ls, 
+            fast_read, 
+            fast_find, 
+            fast_grep,
             get_gcc_history, 
-            list_past_sessions, 
+            list_past_sessions,
             get_session_context,
             branch_session,
             merge_current_session,
@@ -186,11 +191,10 @@ class LangGraphAgent:
         
         # Initialize Intelligence Layer
         self.intelligence = IntelligenceRegistry.get_instance()
-        from src.intelligence.cache import SemanticCache
-        self.cache = SemanticCache()
 
-        # Load Static Skills Documentation once at startup
-        self.skills_documentation = self._load_all_skills()
+        # Phase 27: Dynamic Skill Loading (Claude Selective Loading Pattern)
+        # We no longer load everything at initialization to save context
+        self.skills_documentation = "" 
         
         # Setup Tracing (Modular Phase 15: Langfuse)
         self.handler = ObservabilityService.get_callback_handler(
@@ -219,26 +223,51 @@ class LangGraphAgent:
             logger.error(f"Error reading milestones: {e}")
             return "Error reading history."
 
-    def _load_all_skills(self) -> str:
-        """Discover and load all SKILL.md files into a single documentation block."""
+    def _load_all_skills(self, env: Optional[Dict] = None) -> str:
+        """
+        Discover and load relevant SKILL.md files.
+        Claude Code Pattern: Filter skills to keep context budget low (~2%).
+        """
         skills_path = Path(config.agent.skills_path)
         if not skills_path.exists():
             logger.warning(f"Skills path {skills_path} not found.")
             return "No skills documentation found."
 
+        # Detection logic
+        has_kubectl = False
+        has_docker = False
+        
+        if env and env.get("tools"):
+            k_info = env["tools"].get("kubectl", {})
+            # If context is an Error string or missing, it's not active
+            has_kubectl = "Error" not in str(k_info.get("context", "Error"))
+            
+            d_info = env["tools"].get("docker", {})
+            has_docker = d_info.get("status") == "ready"
+
         all_docs = []
         try:
             for sdir in skills_path.iterdir():
-                if sdir.is_dir():
-                    skill_file = sdir / "SKILL.md"
-                    if skill_file.exists():
-                        with open(skill_file, "r", encoding="utf-8") as f:
-                            content = f.read()
-                            all_docs.append(f"### SKILL: {sdir.name.upper()}\n{content}")
-            
-            summary = f"Total loaded skills: {len(all_docs)}"
+                if not sdir.is_dir():
+                    continue
+                
+                name = sdir.name.lower()
+                
+                # Dynamic Filtering
+                if name in ["kubectl", "helm"] and not has_kubectl:
+                    continue
+                if name == "docker" and not has_docker:
+                    continue
+                
+                skill_file = sdir / "SKILL.md"
+                if skill_file.exists():
+                    with open(skill_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                        all_docs.append(f"### SKILL: {sdir.name.upper()}\n{content}")
+        
+            summary = f"Total loaded skills: {len(all_docs)} (K8s: {has_kubectl}, Docker: {has_docker})"
             logger.info(f"Agent: {summary}")
-            return "\n\n".join(all_docs) if all_docs else "No skills documentation found."
+            return "\n\n".join(all_docs) if all_docs else "No relevant skills documentation found."
         except Exception as e:
             logger.error(f"Error loading skills: {e}")
             return f"Error loading skills: {e}"
@@ -300,13 +329,17 @@ class LangGraphAgent:
             current_hash = state.get("env_hash")
             drift_detected = False
         else:
-            # Full drift detection (Async/Parallel)
-            # Use turn-level cache IF it was already populated this turn, else probe
-            current_info = self.cached_sys_info or await get_system_info()
-            self.cached_sys_info = current_info
-            current_hash = get_env_hash(current_info)
-            last_hash = state.get("env_hash")
-            drift_detected = (last_hash and current_hash != last_hash)
+            # Full drift detection: use turn-level cache ONLY (prober is source of truth)
+            # NEVER call get_system_info() here — it duplicates 3-8s of Windows subprocess probes
+            current_info = self.cached_sys_info
+            if current_info is None:
+                # Fallback: prober didn't run yet, skip drift detection
+                current_hash = state.get("env_hash")
+                drift_detected = False
+            else:
+                current_hash = get_env_hash(current_info)
+                last_hash = state.get("env_hash")
+                drift_detected = (last_hash and current_hash != last_hash)
             
             if drift_detected:
                 logger.warning(f"Expert Audit: Environment DRIFT detected! Hash changed.")
@@ -349,7 +382,9 @@ class LangGraphAgent:
         if loop_detected:
             return {"next_step": "circuit_break", "loop_count": loop_count}
         
-        if drift_detected:
+        # Respect existing next_step from analyzer_node if it was already set to 'reprobe'
+        current_next = state.get("next_step")
+        if drift_detected or current_next == "reprobe":
              return {"next_step": "reprobe", "env_hash": current_hash, "loop_count": loop_count}
             
         update = {"next_step": "continue", "loop_count": loop_count}
@@ -359,33 +394,58 @@ class LangGraphAgent:
         return update
 
     async def sanitizer_node(self, state: AgentState):
-        """Sanitizes tool outputs to prevent prompt injection and ANSI log poisoning."""
-        from src.intelligence.observability import Sanitizer
-        logger.info("Expert Audit: Sanitizing last tool output...")
+        """
+        Sanitize tool output (ANSI strip, injection check) AND handle disk-spill for large output.
+        Claude Code Pattern: Save large output to disk instead of full context injection.
+        """
+        logger.info("Sanitizer: Cleaning and optimizing output...")
+        messages = state["messages"]
+        last_message = messages[-1]
         
-        last_msg = state["messages"][-1]
+        if not isinstance(last_message, ToolMessage):
+            return {"messages": []}
+
+        content = str(last_message.content)
         
-        if isinstance(last_msg, ToolMessage):
-            original_content = last_msg.content
-            # Active Sanitization: Strip ANSI and neutralize adversarial content
-            sanitized_content = Sanitizer.sanitize(original_content)
+        # 1. Strip ANSI codes
+        import re
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        sanitized = ansi_escape.sub('', content)
+
+        # 2. Disk-Spill Logic for Large Output
+        # Claude Code Pattern: CHANGELOG L562-563
+        MAX_INLINE_CHARS = 8000
+        if len(sanitized) > MAX_INLINE_CHARS:
+            from uuid import uuid4
+            spill_dir = Path(config.agent.gcc_base_path) / "tool_output"
+            spill_dir.mkdir(exist_ok=True)
             
-            if sanitized_content != original_content:
-                logger.warning("Expert Audit: Content sanitized (ANSI or Adversarial found).")
-                # BUG-04 FIX: Only return the replacement message, not the full list.
-                # AgentState.messages uses a reducer (lambda x, y: x + y), so returning
-                # the full list would duplicate all messages.
-                new_msg = ToolMessage(
-                    content=sanitized_content,
-                    tool_call_id=last_msg.tool_call_id,
-                    artifact=last_msg.artifact,
-                    status=last_msg.status
-                )
-                # Remove the old message and add the sanitized one
-                from langgraph.graph.message import RemoveMessage
-                return {"messages": [RemoveMessage(id=last_msg.id), new_msg]}
+            spill_file = f"output_{uuid4().hex[:8]}.txt"
+            spill_path = spill_dir / spill_file
+            
+            try:
+                spill_path.write_text(sanitized, encoding="utf-8")
                 
-        return {}
+                # Create a summary for the LLM
+                head = sanitized[:3000]
+                tail = sanitized[-2000:]
+                summary = (
+                    f"{head}\n\n"
+                    f"--- [TRUNCATED: {len(sanitized)} total chars. Full output saved to {spill_path}] ---\n\n"
+                    f"{tail}\n\n"
+                    f"TIP: If you need to search this specific output, use 'fast_grep' on the spill file path above."
+                )
+                sanitized = summary
+                logger.info(f"Sanitizer: Large output spilled to {spill_path}")
+            except Exception as e:
+                logger.error(f"Sanitizer: Failed to spill output: {e}")
+
+        # 3. Update the message content
+        last_message.content = sanitized
+        
+        # Expert Hardening Phase R: Update loop_count here to track Turns accurately
+        # This allows audit_node to see the incremented value
+        return {"messages": [last_message], "loop_count": state.get("loop_count", 0)}
 
     async def ingestion_node(self, state: AgentState):
         logger.info("Ingestion: Checking for new context in GCC logs...")
@@ -398,16 +458,12 @@ class LangGraphAgent:
             new_entries = all_messages[last_count:]
             logger.info(f"Ingestion: Synced {len(new_entries)} new entries from GCC.")
             
-            # Phase 10: Create a 'Handover Note' if there are manual entries
+            # Handover logic
             manual_actions = [m.content for m in new_entries if isinstance(m, HumanMessage) and "[MANUAL]" in m.content]
             handover_note = ""
             if manual_actions:
                 handover_note = f"\nHANDOVER NOTE: The human manually performed the following actions while you were away:\n" + "\n".join(manual_actions)
             
-            # Shadow Indexing: Update semantic memory with new entries
-            full_text = "\n\n".join([m.content for m in new_entries])
-            await self.intelligence.index_session_log(self.session.id, full_text)
-
             # REORDERING LOGIC: 
             # We must ensure [HISTORY] comes BEFORE [CURRENT QUERY].
             # To fix this, we pop the current query, add history, then re-add the query.
@@ -471,21 +527,25 @@ class LangGraphAgent:
                 break
         
         logger.debug(f"Planner: Processing query: '{user_query}'")
-        # Static Skills are now loaded in __init__
+    
+        # Phase 27: Dynamic Skill Loading (LLM Latency Optimization)
+        dynamic_skills = self._load_all_skills(env)
 
         system_prompt = f"""Expert terminal AI. Env: {env.get('os')} ({env.get('release')}), {env.get('shell')}, CWD: {env.get('cwd')}.
 Tools: K8s: {tools_info.get('kubectl', {}).get('context', 'N/A')}, Docker: {tools_info.get('docker', {}).get('status', 'N/A')}, Git: {tools_info.get('git', {}).get('branch', 'N/A')}.
 {denial_context}
 
 Rules:
-1. Native commands for detected OS/Shell. Use absolute paths if ambiguity exists.
-2. OBSERVATION FIRST: If the last message contains tool output, you MUST start by summarizing the findings (even if empty, e.g. "The command produced no output, confirming no containers are running") and explaining technical insights.
-3. NEXT STEP: After summarizing, either propose the next tool command OR state that the goal is achieved and provide a final summary.
+1. TOOL USE MANDATORY: You are an execution-focused agent. For any file search, listing, or reading, you MUST use one of the tools provided (fast_ls, fast_read, fast_find, fast_grep). DO NOT just describe or think about the action; EXECUTE IT immediately using the tool call block.
+2. PREFER FAST TOOLS: Always use the Python-native 'fast_*' tools for read experiments to minimize latency.
+3. Native commands (kubectl, git, docker) should only be used via 'run_command' when a native fast tool doesn't exist.
+4. OBSERVATION FIRST: If the last message contains tool output, you MUST start by summarizing the findings and explaining technical insights.
+5. NEXT STEP: After summarizing, propose the next tool command or state the goal is reached.
 4. NEVER repeat the same command twice if the result was successful (even if empty). Move forward or refine your search.
 5. Keep response concise but highly technical (max 5-7 sentences).
 
 History/Rules:
-{self.skills_documentation}
+{dynamic_skills}
 
 Recent Milestones:
 {self.context_recap}
@@ -499,17 +559,6 @@ Recent Milestones:
         # This prevents looping back to a cached 'tool call' plan when we should be summarizing.
         has_tool_results = any(isinstance(m, ToolMessage) for m in state["messages"][-3:])
         
-        # Expert Hardening Phase M: Semantic Cache Check
-        cached_response = None
-        if not has_tool_results:
-            cached_response = await self.cache.get(user_query)
-            if cached_response:
-                logger.info("Planner: Semantic Cache HIT.")
-            
-        if cached_response:
-             # Fast Path: Return cached AIMessage
-             return {"messages": [AIMessage(content=cached_response)], "denial_reason": None}
-
         logger.info("Planner: Invoking LLM...")
         response = await self.llm_with_tools.ainvoke(msg_history)
         logger.info(f"Planner: LLM responded (Content: {bool(response.content)}, Tools: {len(response.tool_calls)})")
@@ -559,57 +608,63 @@ Recent Milestones:
                 ai_msg = last_msgs[i-1]
                 if isinstance(ai_msg, AIMessage) and ai_msg.tool_calls:
                     call = ai_msg.tool_calls[0]
-                    if call["name"] == "run_command":
-                        cmd = call["args"].get("cmd", "") or call["args"].get("command", "")
-                        skill_id = "core"
-                        if "docker" in cmd: skill_id = "docker"
-                        elif "kubectl" in cmd: skill_id = "kubectl"
-                        elif "git" in cmd: skill_id = "git"
+                    tool_name = call["name"]
+                    
+                    # Phase 4: Generalize — log ALL tool types (CC pattern)
+                    # Extract action string based on tool type
+                    if tool_name == "run_command":
+                        action = call["args"].get("cmd", "") or call["args"].get("command", "")
+                    else:
+                        # Fast tools: format as tool_name(args)
+                        args_str = ", ".join(f"{k}={v}" for k, v in call["args"].items())
+                        action = f"{tool_name}({args_str})"
+                    
+                    # Detect skill for intelligence DB
+                    skill_id = "core"
+                    action_lower = action.lower()
+                    if "docker" in action_lower: skill_id = "docker"
+                    elif "kubectl" in action_lower: skill_id = "kubectl"
+                    elif "git" in action_lower: skill_id = "git"
+                    
+                    try:
+                        # Phase O: Use track_task to ensure shutdown safety
+                        self.intelligence.track_task(
+                            self.intelligence.db.log_command(
+                                self.session.id,
+                                skill_id,
+                                action,
+                                0,
+                                str(msg.content)[:200],
+                                state.get("env", {})
+                            )
+                        )
                         
-                        try:
-                            # Phase O: Use track_task to ensure shutdown safety
-                            self.intelligence.track_task(
-                                self.intelligence.db.log_command(
-                                    self.session.id,
-                                    skill_id,
-                                    cmd,
-                                    0,
-                                    str(msg.content)[:200],
-                                    state.get("env", {})
-                                )
-                            )
-                            
-                            # GCC LOGGING: Record the action and result in log.md
-                            self.logger.log_ai_action(
-                                thought=ai_msg.content,
-                                action=cmd,
-                                output=str(msg.content)
-                            )
-                            
-                            # Expert Hardening Phase S: Success Detection & Recovery Reflex
-                            output = str(msg.content).lower()
-                            # STABILITY FIX: Ensure we are only looking at Tool outputs, not previous AI reflections
-                            # AND check if the output is not just a summary of an error
-                            fail_patterns = ["permission denied", "not found", "error:", "access denied", "no such file", "failed to"]
-                            
-                            # Refined: Only trigger if the output IS the failure, not if we're describing it
-                            is_failure = any(fail in output for fail in fail_patterns)
-                            is_system_thought = "[system reflection]" in output
-                            
-                            if is_failure and not is_system_thought:
-                                logger.warning("Analyzer: Tool failure detected. Injecting recovery hint.")
-                                # Update UI state if we are in an active run loop
-                                # Note: This only works if analyzer_node has access to ui, 
-                                # but usually it's passed via state or closure.
-                                # Since this is a method, we can't easily reach 'ui' from 'run()'.
-                                # We will rely on on_node_end to sync errors.
-                                return {
-                                    "messages": [HumanMessage(content=f"[SYSTEM REFLECTION] The previous command produced an error: '{output[:100]}...'. Do NOT repeat the same command. Try a different strategy.")],
-                                    "next_step": "reprobe",
-                                    "last_error": f"Tool Error: {output[:80]}..."
-                                }
-                        except Exception as e:
-                            logger.error(f"Analyzer: Failed to log command: {e}")
+                        # GCC LOGGING: Record the action and result in log.md
+                        self.logger.log_ai_action(
+                            thought=ai_msg.content if isinstance(ai_msg.content, str) else str(ai_msg.content),
+                            action=action,
+                            output=str(msg.content)
+                        )
+                        
+                        # Expert Hardening Phase S: Success Detection & Recovery Reflex
+                        output = str(msg.content).lower()
+                        fail_patterns = ["permission denied", "not found", "error:", "access denied", "no such file", "failed to"]
+                        
+                        is_failure = any(fail in output for fail in fail_patterns)
+                        is_system_thought = "[system reflection]" in output
+                        is_truncated = "--- [truncated:" in output
+                        
+                        # STABILITY: Only trigger recovery if the output is NOT truncated.
+                        # Recursive scans like 'dir /s' often have individual file failures which are normal.
+                        if is_failure and not is_system_thought and not is_truncated:
+                            logger.warning("Analyzer: Tool failure detected. Injecting recovery hint.")
+                            return {
+                                "messages": [HumanMessage(content=f"[SYSTEM REFLECTION] The previous command produced an error: '{output[:100]}...'. Do NOT repeat the same command. Try a different strategy.")],
+                                "next_step": "reprobe",
+                                "last_error": f"Tool Error: {output[:80]}..."
+                            }
+                    except Exception as e:
+                        logger.error(f"Analyzer: Failed to log {tool_name}: {e}")
         return {}
 
     async def router_node(self, state: AgentState):
@@ -636,6 +691,23 @@ Recent Milestones:
         if not user_query or len(user_query) > 100 or "\n" in user_query.strip(): # Only speculate on short, single-line queries
             return {"next_step": "planner"}
 
+        # Phase 27: Speculative Bypass (Reduce Reflexive Latency)
+        # If the user query IS a raw command in auto_execute, bypass fast_llm entirely
+        tier, pat = classifier.classify(user_query)
+        logger.info(f"Router: Speculative check for '{user_query}' -> Tier: {tier}, Pattern: {pat}")
+        if tier == "auto_execute":
+            logger.info(f"Router: Speclative BYPASS triggered for auto_execute command: '{user_query}'")
+            from uuid import uuid4
+            tool_call = {
+                "name": "run_command",
+                "args": {"cmd": user_query},
+                "id": f"spec_{uuid4().hex[:8]}"
+            }
+            return {
+                "messages": [AIMessage(content=f"Fast-path skip: Executing auto-allowed command: {user_query}", tool_calls=[tool_call])],
+                "next_step": "fast_path"
+            }
+
         # Combined classification and generation prompt for 1-turn response
         import traceback
         system_os = state.get('env', {}).get('os', 'Linux')
@@ -653,6 +725,9 @@ If it is complex (strategy, multi-step, analysis) OR a normal conversational que
 
 Request: {user_query}
 Format: Return exactly the command string or "COMPLEX"."""
+
+        if self.fast_llm is None:
+            return {"next_step": "planner"}
 
         try:
             res = await self.fast_llm.ainvoke([HumanMessage(content=prompt)], stream=False)
@@ -699,8 +774,9 @@ DO NOT suggest running dangerous commands. If asked for a command, provide the t
 
 Request: {user_query}"""
         
-        # Use the fast model for instant responses
-        res = await self.fast_llm.ainvoke([HumanMessage(content=prompt)])
+        # Use the fast model if available, else fall back to the main LLM
+        chat_llm = self.fast_llm if self.fast_llm is not None else self.llm
+        res = await chat_llm.ainvoke([HumanMessage(content=prompt)])
         return {
             "messages": [AIMessage(content=res.content)],
             "next_node": "END" # Chat ends the turn
@@ -717,9 +793,14 @@ Request: {user_query}"""
             
             # Check all tool calls in the message
             for tc in last_message.tool_calls:
+                # Expert Hardening: If it's a native fast tool, it's auto_execute by policy
+                if tc.get("name", "").startswith("fast_"):
+                    continue
+
                 # Support both 'cmd' and 'command' argument names
-                cmd = tc["args"].get("cmd", "") or tc["args"].get("command", "")
-                tier = classifier.classify(cmd)
+                args = tc.get("args") or {}
+                cmd = args.get("cmd", "") or args.get("command", "")
+                tier, _ = classifier.classify(cmd)
                 
                 # If any tool call requires approval, route to 'executor' (interrupted)
                 if tier != "auto_execute":
@@ -830,6 +911,13 @@ Request: {user_query}"""
                 "messages": [HumanMessage(content=user_input)],
                 "user_mode": user_mode
             }
+            
+            # Phase 4: Inject pending human context from !cmd executions
+            if hasattr(self, '_pending_human_context') and self._pending_human_context:
+                for ctx in self._pending_human_context:
+                    initial_state["messages"].insert(0, HumanMessage(content=ctx))
+                self._pending_human_context.clear()
+                logger.info(f"LangGraph: Injected {len(initial_state['messages'])-1} human context messages")
         else:
             logger.info(f"LangGraph: Starting fresh session {self.session.id}")
             initial_state = {
@@ -967,6 +1055,23 @@ Request: {user_query}"""
                         # Final update for completion
                         render.transition(RenderState.COMPLETED)
                         live.update(render.get_live_group())
+        except asyncio.CancelledError:
+            # Phase 4: Esc interrupt — stop Live cleanly and inject interrupted message
+            logger.info("Agent loop cancelled by user (Esc).")
+            try:
+                render.transition(RenderState.COMPLETED)
+                live.update(render.get_live_group())
+            except Exception:
+                pass  # Live might already be stopped
+            # Inject interruption context for next turn
+            try:
+                await self.app.aupdate_state(trace_config, {
+                    "messages": [HumanMessage(content="[SYSTEM] Previous operation was interrupted by user.")],
+                    "loop_count": 0
+                })
+            except Exception as e:
+                logger.warning(f"Could not update state after cancellation: {e}")
+            raise
         except Exception as e:
             logger.critical(f"Fatal error in agent loop: {e}")
             await self.emergency_panic()
@@ -986,7 +1091,7 @@ Request: {user_query}"""
         is_pivot_likley = any(k in user_input.lower() for k in keywords)
         
         # 2. If it's a long input or keywords matched, do a fast LLM check
-        if is_pivot_likley or len(user_input) > 200:
+        if (is_pivot_likley or len(user_input) > 200) and self.fast_llm is not None:
             prompt = f"""Assess if this user input is a fundamental task switch from the current goal.
 Current Goal: {self.session.goal}
 User Input: {user_input}
@@ -1059,6 +1164,21 @@ Respond ONLY with 'SWITCH' or 'CONTINUE'."""
 
     async def shutdown(self):
         """Phase O: Graceful exit for all agent resources."""
+        # Phase 4: Clean up spill files from tool_output/ (CC memory pattern)
+        try:
+            from pathlib import Path
+            spill_dir = Path(config.agent.gcc_base_path) / "tool_output"
+            if spill_dir.exists():
+                import time
+                for f in spill_dir.iterdir():
+                    if f.is_file() and f.suffix == '.txt':
+                        # Delete files older than 1 hour
+                        if time.time() - f.stat().st_mtime > 3600:
+                            f.unlink()
+                            logger.info(f"Shutdown: Cleaned up stale spill file: {f.name}")
+        except Exception as e:
+            logger.warning(f"Shutdown: Spill cleanup failed: {e}")
+        
         await self.intelligence.shutdown()
 
 # Placeholder for Phase 2 implementation in agent/core.py

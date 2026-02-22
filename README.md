@@ -14,15 +14,15 @@ A premium, state-of-the-art AI assistant designed for high-stakes DevOps enginee
 *   **⌨️ Hybrid Mode Switching (Tab)**: Cycle between `AUTO`, `EXEC`, and `CHAT` modes using the `Tab` key on an empty input.
 *   **⚡ Speculative Fast-Path**: A localized reflexive model (Router) intercepts simple requests for sub-500ms command generation, bypassing the heavy planner.
 *   **💬 Conversational Bypass**: Purely informational queries are short-circuited to a dedicated `Chat` node for instant, non-executing responses.
-*   **🧠 LangGraph Intelligence**: Multi-node reasoning with circuit breakers and environment drift detection.
+*   **🧠 LangGraph Intelligence**: Multi-node reasoning with circuit breakers, semantic loop detection, and environment drift detection.
 *   **📜 GCC (Git Context Controller)**: Git-inspired project memory with branching lineage, logs, and findings.
 *   **🛡️ Safety Gate**: Built-in human-in-the-loop approval system for all terminal commands.
 *   **🔭 High-Fidelity Visualizer**: Interactive 3-column dashboard with a deterministic D3 hierarchical tree, live log streaming, and resilient parser hardening.
 *   **⚡ AI Summoner (Ctrl+R)**: Seamlessly switch between Manual Shell and AI Chat without losing context.
 *   **🖥️ Live Status HUD**: A dynamic status bar tracking reasoning nodes (`🧠 Planning`, `🛠️ Executing`, `💬 Conversing`).
-*   **🧠 Intelligence Layer**: Hybrid memory using SQLite and LanceDB with "Platinum Envelope" structured ingestion.
+*   **🧠 Intelligence Layer**: Structured metadata and session history stored in **SQLite** with offset-based incremental ingestion.
 *   **👁️ Observability**: Full local tracing via **Langfuse** with automated PII/Secret redaction.
-*   **🛡️ Production-Grade Hardening**: Built-in protection against PII leaks, context window overflow, and malformed command output.
+*   **🛡️ Production-Grade Hardening**: Built-in protection against PII leaks, context window overflow, probe timeouts, and DB lock contention.
 
 ---
 
@@ -52,8 +52,7 @@ graph TD
     
     subgraph "Intelligence Layer"
         Interaction <--> Registry[Intelligence Registry]
-        Registry <--> SQLite[(SQLite - Metadata)]
-        Registry <--> LanceDB[(LanceDB - Vector)]
+        Registry <--> SQLite[(SQLite - Sessions & Metadata)]
     end
 ```
 
@@ -109,7 +108,7 @@ cd src/cli/visualizer && bun run dev
 ---
 
 ## 🧹 Maintenance
-*   **Nuclear Reset**: Wipe all local state (SQLite, LanceDB, GCC) and start fresh:
+*   **Nuclear Reset**: Wipe all local state (SQLite, GCC) and start fresh:
     ```bash
     uv run devops-agent reset --nuclear
     ```
